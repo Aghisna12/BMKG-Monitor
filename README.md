@@ -35,9 +35,6 @@ Menampilkan informasi cuaca secara sederhana, cepat, dan ringan untuk diakses da
 BMKG-Monitor/
 │
 ├── index.html        # Halaman utama
-├── style.css         # Styling
-├── script.js         # Logic & fetch data
-├── assets/           # Gambar/icon
 └── README.md         # Dokumentasi
 ```
 
