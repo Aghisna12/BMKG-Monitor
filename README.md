@@ -98,7 +98,7 @@ Project ini dibuat untuk:
 
 ## 📸 Preview
 
-![Preview Website](https://bmkg-monitor.web.app/preview.png)
+![Preview Website](preview.png)
 
 ---
 
