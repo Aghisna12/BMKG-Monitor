@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BMKG Monitor - Cuaca & Gempa</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <style>
+        :root {
+            --primary: #00A3FF;
+            --secondary: #0056D2;
+            --accent: #FFD700;
+            --danger: #FF4B4B;
+            --success: #00C851;
+            --warning: #FFBB33;
+            --bg-light: #F0F4F8;
+            --text-dark: #1E293B;
+            --text-light: #64748B;
+            --card-bg: rgba(255, 255, 255, 0.9);
+            --card-glass: rgba(255, 255, 255, 0.7);
+        }
+
+        [data-theme="dark"] {
+            --bg-light: #0F172A;
+            --text-dark: #F1F5F9;
+            --text-light: #94A3B8;
+            --card-bg: rgba(30, 41, 59, 0.9);
+            --card-glass: rgba(30, 41, 59, 0.7);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; transition: background 0.3s, color 0.3s; }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-light);
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(0, 163, 255, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(255, 215, 0, 0.1) 0px, transparent 50%);
+            color: var(--text-dark);
+            min-height: 100vh;
+        }
+
+        /* --- Header --- */
+        header {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            padding: 1rem 5%;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .brand { display: flex; align-items: center; gap: 10px; }
+        .brand i { font-size: 1.5rem; color: var(--primary); }
+        .brand h1 { font-size: 1.25rem; font-weight: 700; }
+
+        .controls { display: flex; gap: 10px; }
+        
+        select {
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            background: var(--card-bg);
+            color: var(--text-dark);
+            cursor: pointer;
+        }
+
+        .theme-toggle {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1.2rem;
+            color: var(--text-dark);
+            padding: 5px;
+        }
+
+        /* --- Layout --- */
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+        }
+
+        /* --- Cards --- */
+        .card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+            padding-bottom: 0.5rem;
+        }
+        
+        .card-header h2 { font-size: 1.1rem; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+
+        /* --- Weather Specific --- */
+        .weather-main {
+            text-align: center;
+            padding: 1rem;
+        }
+        .weather-icon { font-size: 4rem; color: var(--primary); margin-bottom: 10px; }
+        .temp-large { font-size: 3.5rem; font-weight: 700; letter-spacing: -2px; }
+        .weather-desc { font-size: 1.2rem; color: var(--text-light); text-transform: capitalize; }
+        
+        .weather-details {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            margin: 1.5rem 0;
+            text-align: center;
+        }
+        .detail-item { background: rgba(0,0,0,0.03); padding: 10px; border-radius: 10px; }
+        .detail-item span { display: block; font-size: 0.8rem; color: var(--text-light); }
+        .detail-item strong { font-size: 1rem; }
+
+        .forecast-lists {
+            padding: 12px 10px;
+        }
+
+        .forecast-list {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            overflow-x: auto;
+            padding: 10px 0;
+            margin-top: 5px;
+        }
+
+        .forecast-item {
+            min-width: 120px;
+            text-align: center;
+            padding: 10px;
+            background: rgba(0,0,0,0.02);
+            border-radius: 10px;
+        }
+
+        /* --- Quake Specific --- */
+        .quake-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+            position: relative;
+        }
+        .quake-mag {
+            position: absolute;
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: 700;
+            color: white;
+            font-size: 0.9rem;
+        }
+        .mag-normal { background: var(--success); }
+        .mag-warning { background: var(--warning); }
+        .mag-danger { background: var(--danger); animation: pulse 2s infinite; }
+
+        .quake-info {
+            display: grid;
+            gap: 5px;
+            margin-left: 60px;
+        }
+        
+        .quake-info h4 { font-size: 0.95rem; margin-bottom: 2px; }
+        .quake-info p { font-size: 0.8rem; color: var(--text-light); }
+        
+        /* --- Alert & AQI --- */
+        .alert-box {
+            background: #FEF2F2;
+            color: #991B1B;
+            border: 1px solid #FECACA;
+            padding: 1rem;
+            border-radius: 10px;
+            margin-bottom: 1rem;
+            display: flex;
+            gap: 10px;
+            align-items: start;
+        }
+        .alert-box.hidden { display: none; }
+        
+        .aqi-circle {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            border: 8px solid var(--success);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            margin: 0 auto;
+        }
+        .aqi-val { font-size: 2rem; font-weight: 700; }
+        .aqi-label { font-size: 0.8rem; }
+
+        /* --- Footer --- */
+        footer {
+            text-align: center;
+            padding: 2rem 5px;
+            color: var(--text-light);
+            background: var(--card-bg);
+            font-size: 0.9rem;
+        }
+
+        /* --- Utilities --- */
+        .loading { text-align: center; padding: 2rem; color: var(--text-light); }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 75, 75, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(255, 75, 75, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 75, 75, 0); } }
+        
+        #mapArea { height: 280px; width: 100%; border-radius: 10px; margin-top: 10px; z-index: 1;}
+        #map { height: 220px; width: 100%; border-radius: 10px; margin-top: 10px; z-index: 1;}
+        
+        @media (min-width: 768px) {
+            .container { grid-template-columns: repeat(2, 1fr); }
+            .weather-section { grid-column: span 2; }
+        }
+
+        @media (min-width: 1024px) {
+            .container { grid-template-columns: 2fr 1fr; }
+            .weather-section { grid-column: span 1; }
+        }
+
+        @media (max-width: 1024px) {
+            .forecast-list { grid-template-columns: repeat(4, 1fr); }
+            .weather-details { grid-template-columns: repeat(4, 1fr); }
+        }
+
+        @media (max-width: 768px) {
+            .forecast-list { grid-template-columns: repeat(3, 1fr); }
+            .weather-details { grid-template-columns: repeat(3, 1fr);
+        }
+
+        @media (max-width: 480px) {
+            .forecast-list { grid-template-columns: repeat(2, 1fr); }
+            .weather-details { grid-template-columns: repeat(2, 1fr);
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="brand">
+            <i class="fas fa-cloud-sun-rain"></i>
+            <h1>BMKG Monitor</h1>
+        </div>
+        <div class="controls">
+            <select id="kelurahanSelect">
+                <option value="33.10.07.2001">Gondang</option>
+                <option value="33.10.07.2002">Basin</option>
+                <option value="33.10.07.2003">Pluneng</option>
+                <option value="33.10.07.2004">Ngrundul</option>
+                <option value="33.10.07.2005">Malangjiwan</option>
+                <option value="33.10.07.2006">Karangduren</option>
+                <option value="33.10.07.2007">Menden</option>
+            </select>
+            <button class="theme-toggle" id="themeToggle"><i class="fas fa-moon"></i></button>
+        </div>
+    </header>
+
+    <div class="container">
+        <section class="weather-section">
+            <div id="alertBox" class="alert-box hidden">
+                <i class="fas fa-exclamation-triangle"></i>
+                <div>
+                    <strong>Peringatan Dini</strong>
+                    <p id="alertMsg"></p>
+                    <small id="alertDate"></small>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <h2><i class="fas fa-map-marker-alt"></i> Prakiraan Cuaca</h2>
+                        <span id="locationName" style="font-weight: 400; font-size: 0.9rem; margin-left: 20px; color: var(--text-light);">(Memuat...)</span>
+                    </div>
+                </div>
+                <h3 id="lastUpdateWeather" style="font-size: 0.8rem; color: var(--text-light);"></h3>
+                <div id="weatherContent">
+                    <div class="loading"><i class="fas fa-spinner fa-spin"></i> Mengambil data cuaca...</div>
+                </div>
+            </div>
+
+            <div class="card" style="margin-top: 1.5rem;">
+                <div class="card-header">
+                    <h2><i class="fas fa-map"></i> Perkiraan Cuaca Area</h2>
+                </div>
+
+                <div id="mapArea"></div>
+                <div id="areaContent" style="text-align: center;margin-top: 10px;">
+                    <div class="loading"><i class="fas fa-spinner fa-spin"></i> Mengambil data area...</div>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <h2><i class="fas fa-house-crack"></i> Gempa Terkini</h2>
+                        <small>Update setiap 1 menit</small>
+                    </div>
+                    <div class="live-indicator" style="display: flex; align-items: center; gap:5px; font-size: 0.75rem; color: var(--danger);">
+                        <span style="width:8px; height:8px; background:var(--danger); border-radius:50%; display:inline-block;"></span> Live
+                    </div>
+                </div>
+
+                <div id="map"></div>
+                <div style="font-size: 0.8rem; text-align: right; margin: 5px 0; color: var(--text-light);">Lokasi gempa terbaru</div>
+
+                <div id="quakeList" style="margin-top: 1rem;">
+                    <div class="loading"><i class="fas fa-spinner fa-spin"></i> Mengambil data gempa...</div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <footer>
+        <p>Data disediakan oleh BMKG Indonesia</p>
+        <p style="margin-top: 5px; font-size: 0.8rem;">&copy; 2025 BMKG Monitor App - 🚀 <a href="https://github.com/Aghisna12" style="text-decoration: none;" target="_blank"> Muhammad Gufron</a></p>
+    </footer>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // --- Konfigurasi ---
+        // Kita menggunakan Proxy CORS untuk menghindari blokir browser saat akses API BMKG langsung
+        const CORS_PROXY = "https://cors.aghisna12.workers.dev/?url=";
+
+        let mapArea;
+        let map;
+        let mapMarker;
+        let mapMarkerArea;
+
+        // --- Inisialisasi ---
+        document.addEventListener('DOMContentLoaded', () => {
+            loadWeather('33.10.07.2001'); // Default
+            initMap();
+            loadQuakes();
+            
+            // Event Listeners
+            document.getElementById('kelurahanSelect').addEventListener('change', (e) => {
+                loadWeather(e.target.value);
+            });
+
+            document.getElementById('themeToggle').addEventListener('click', () => {
+                const body = document.body;
+                const isDark = body.getAttribute('data-theme') === 'dark';
+                body.setAttribute('data-theme', isDark ? 'light' : 'dark');
+                document.getElementById('themeToggle').innerHTML = isDark ? '<i class="fas fa-moon"></i>' : '<i class="fas fa-sun"></i>';
+            });
+            
+            // Auto refresh gempa tiap 1 menit
+            setInterval(loadQuakes, 60000); 
+        });
+
+        // --- Fungsi Map Leaflet ---
+        function initMap() {
+            mapArea = L.map('mapArea',{closePopupOnClick: false}).setView([-7.70028, 110.56306], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(mapArea);
+            map = L.map('map').setView([-6.2088, 106.8456], 5);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(map);
+        }
+
+        // --- 1. Fungsi Cuaca (Parsing XML) ---
+        async function loadWeather(kelurahan) {
+            const contentDiv = document.getElementById('weatherContent');
+            contentDiv.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> Mengambil data cuaca...</div>';
+            
+            try {
+                // Fetch via Proxy
+                const response = await fetch(CORS_PROXY + 'https://api.bmkg.go.id/publik/prakiraan-cuaca?adm4=' + kelurahan);
+                const json = await response.json();
+                if (!json) return;
+                const data = json.data[0];
+                //console.log(json)
+                const desa = data.lokasi.desa;
+                document.getElementById('locationName').innerText = `${desa}, ${data.lokasi.kecamatan}, ${data.lokasi.kotkab}`;
+                document.getElementById('lastUpdateWeather').innerText = new Date(data.cuaca[0][0].local_datetime).toLocaleString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'});
+
+                const weatherLabel = data.cuaca[0][0].weather_desc;
+                const weatherAlert = {label:null, date:null};
+                const image = data.cuaca[0][0].image;
+                const temp = data.cuaca[0][0].t;
+                const humidity = data.cuaca[0][0].hu;
+                const vs = data.cuaca[0][0].vs_text;
+                const tcc = data.cuaca[0][0].tcc;
+                const wd = data.cuaca[0][0].wd;
+                const wd_deg = data.cuaca[0][0].wd_deg;
+                const wd_to = data.cuaca[0][0].wd_to;
+                const ws = data.cuaca[0][0].ws;
+                const windKmh = Math.round(parseFloat(ws) * 1.852); // Knot to Km/h
+
+                // Render HTML Utama
+                let html = `
+                    <div class="weather-main">
+                        <img src="${image}" width="120" height="120">
+                        <div class="temp-large">${temp}°C</div>
+                        <div class="weather-desc">${weatherLabel}</div>
+                    </div>
+                    <div class="weather-details">
+                        <div class="detail-item">
+                            <i class="fas fa-tint" style="color:var(--secondary)"></i>
+                            <span>Kelembaban</span>
+                            <strong>${humidity}%</strong>
+                        </div>
+                        <div class="detail-item">
+                            <i class="fas fa-wind" style="color:var(--text-light)"></i>
+                            <span>Angin</span>
+                            <strong>${ws} <small>km/h</small></strong>
+                        </div>
+                        <div class="detail-item">
+                            <i class="fas fa-compass" style="color:var(--text-light)"></i>
+                            <span>Arah Angin</span>
+                            <strong><i class="fas fa-location-arrow wind-icon" style="transform: rotate(${wd_deg - 45}deg)"></i> ${wd_to}</strong>
+                        </div>
+                        <div class="detail-item">
+                            <i class="fas fa-eye" style="color:var(--text-light)"></i>
+                            <span>Pandangan</span>
+                            <strong>${vs}</strong>
+                        </div>
+                        <div class="detail-item">
+                            <i class="fas fa-cloud" style="color:var(--text-light)"></i>
+                            <span>Awan</span>
+                            <strong>${tcc}%</strong>
+                        </div>
+                    </div>
+                `;
+
+                const days = {};
+                for(let i=0; i< data.cuaca.length; i++) {
+                    for (let x=0; x < data.cuaca[i].length; x++) {
+                        if (i == 0 && x == 0) continue;
+                        if (!Array.isArray(days[data.cuaca[i][x].local_datetime.split(' ')[0]])) {
+                            days[data.cuaca[i][x].local_datetime.split(' ')[0]] = [];
+                        }
+                        days[data.cuaca[i][x].local_datetime.split(' ')[0]].push(data.cuaca[i][x]);
+                    }
+                }
+
+                // Render Forecast Loop (Next 3 timeranges)
+                for(const i in days) {
+                    days[i].sort(function(a, b) { return a.local_datetime - b.local_datetime; });
+                    html += `<div class="forecast-lists">
+                                <h3 style="font-size:1rem;"><i class="fas fa-calendar-days"></i> ${new Date(i).toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</h3>
+                                    <div class="forecast-list">`;
+                    for (let x=0; x < days[i].length; x++) {
+                        const img = days[i][x].image;
+                        const wLabel = days[i][x].weather_desc;
+                        if (wLabel.toLowerCase().includes('hujan') && (!weatherAlert.label || !weatherAlert.date)) {
+                            weatherAlert.label = wLabel;
+                            weatherAlert.date = days[i][x].local_datetime;
+                        }
+                        const h = days[i][x].local_datetime.split(' ')[1].slice(0, -3);
+                        const tCode = days[i][x].t;
+
+                        html += `
+                            <div class="forecast-item">
+                                <div style="font-size:0.9rem; margin-bottom:5px;">${h}</div>
+                                <img src="${img}" width="60" height="60">
+                                <div style="font-size:0.8rem;">${tCode}°</div>
+                                <div style="font-weight:600;">${wLabel}</div>
+                            </div>
+                        `;
+                    }
+                    html += `</div></div>`;
+                }
+                contentDiv.innerHTML = html;
+
+                // Cek Warning Sederhana (Jika cuaca buruk)
+                checkWeatherWarning(weatherAlert);
+
+                // Load AQI berdasarkan koordinat kota
+                const lat = json.lokasi.lat;
+                const lon = json.lokasi.lon;
+                updateMapArea(lat, lon, desa, image, weatherLabel);
+            } catch (error) {
+                console.error(error);
+                contentDiv.innerHTML = `<div class="loading" style="color:var(--danger)">Gagal memuat data cuaca.<br>Coba refresh halaman.</div>`;
+            }
+        }
+
+        // --- 2. Fungsi Gempa ---
+        async function loadQuakes() {
+            const listDiv = document.getElementById('quakeList');
+            const url = CORS_PROXY + 'https://data.bmkg.go.id/DataMKG/TEWS/gempadirasakan.json';
+            const cacheBuster = new Date().getTime();
+            const separator = url.includes('?') ? '&' : '?';
+            const finalUrl = `${url}${separator}_=${cacheBuster}`;
+            
+            try {
+                // Ambil Gempa Terkini (> M 5.0)
+                const response = await fetch(finalUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache',
+                        'Expires': '0'
+                    }
+                });
+                const data = await response.json();
+                //console.log(data)
+                const quakes = data.Infogempa.gempa; // Array max 15 gempa
+
+                let html = '';
+                
+                // Ambil gempa terbaru untuk Map
+                const latest = quakes[0];
+                updateMap(latest);
+
+                // Loop 5 gempa terakhir
+                quakes.slice(0, 5).forEach(q => {
+                    const magnitude = parseFloat(q.Magnitude);
+                    let magClass = 'mag-normal';
+                    if (magnitude >= 5.0) magClass = 'mag-warning';
+                    if (magnitude >= 6.0) magClass = 'mag-danger';
+
+                    html += `
+                        <div class="quake-item">
+                            <div class="quake-mag ${magClass}">${q.Magnitude}</div>
+                            <div class="quake-info">
+                                <h4>${q.Wilayah}</h4>
+                                <p><i class="fas fa-clock"></i> ${q.Tanggal} - ${q.Jam}</p>
+                                <p><i class="fas fa-ruler-vertical"></i> Kedalaman: ${q.Kedalaman}</p>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                listDiv.innerHTML = html;
+
+            } catch (error) {
+                console.error(error);
+                listDiv.innerHTML = `<div class="loading" style="color:var(--danger)">Gagal memuat data gempa.</div>`;
+            }
+        }
+
+        function updateMapArea(lat, lon, desa, image, label) {
+            if(mapMarkerArea) mapArea.removeLayer(mapMarkerArea);
+            mapArea.setView([lat, lon], 14);
+            mapMarkerArea = L.marker([lat, lon]).addTo(mapArea)
+                .bindPopup(`<div style="text-align:center"><h5>${desa}</h5><img src="${image}" width=32 height=32><h6>${label}</h6></div>`)
+                .openPopup();
+            const areaContent = document.getElementById("areaContent");
+            areaContent.innerHTML = `<small><i class="fas fa-globe"></i> lat: ${lat}, lon: ${lon}</small>`;
+        }
+
+        function updateMap(quake) {
+            const coords = quake.Coordinates.split(",");
+            const lat = parseFloat(coords[0]);
+            const lon = parseFloat(coords[1]);
+
+            if(mapMarker) map.removeLayer(mapMarker);
+            
+            map.setView([lat, lon], 7);
+            mapMarker = L.marker([lat, lon]).addTo(map)
+                .bindPopup(`<b>Gempa Magnitude ${quake.Magnitude}</b><br><small>${quake.Wilayah}</small><br>${quake.Tanggal}, ${quake.Jam}`)
+                .openPopup();
+        }
+
+        // --- 3. Fungsi Peringatan (Derived) ---
+        function checkWeatherWarning(alert) {
+            const alertBox = document.getElementById('alertBox');
+            const alertMsg = document.getElementById('alertMsg');
+            const alertDate = document.getElementById('alertDate');
+            
+            // Kode 95 & 97 adalah Hujan Petir, 63 Hujan Lebat
+            if (alert.label && alert.date) {
+                alertBox.classList.remove('hidden');
+                if (alert.label.toLowerCase().includes('lebat') || alert.label.toLowerCase().includes('petir')) {
+                    alertMsg.innerText = "Waspada potensi " + alert.label;
+                    alertDate.innerText = new Date(alert.date).toLocaleString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: 'numeric'});
+                } else {
+                    alertMsg.innerText = "Potensi " + alert.label;
+                    alertDate.innerText = new Date(alert.date).toLocaleString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: 'numeric'});
+                }
+            } else {
+                alertBox.classList.add('hidden');
+            }
+        }
+
+        // --- 4. Fungsi Kualitas Udara (Menggunakan OpenMeteo sbg Fallback Data BMKG yg sulit di parse JSON) ---
+        async function loadArea(lat, lon) {
+            const areaContent = document.getElementById('areaContent');
+            
+            try {
+                // Open-Meteo Air Quality API (Gratis, No Key, CORS Friendly)
+                const url = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=us_aqi,pm2_5,pm10`;
+                const res = await fetch(url);
+                const data = await res.json();
+                areaContent.innerHTML = html;
+            } catch (error) {
+                areaContent.innerHTML = `<div style="font-size:0.8rem; color:var(--text-light)">Data AQI tidak tersedia untuk lokasi ini.</div>`;
+            }
+        }
+    </script>
+</body>
+</html>
